@@ -173,19 +173,19 @@ jobs:
         run: ./mvnw $MAVEN_ARGS test-compile
 
       - name: Collect unit execution data
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: unit-test-reports
           path: downloaded/unit
 
       - name: Collect integration execution data
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: integration-test-reports
           path: downloaded/integration
 
       - name: Collect system execution data
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: system-test-reports
           path: downloaded/system
