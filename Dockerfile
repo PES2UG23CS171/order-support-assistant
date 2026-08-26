@@ -10,7 +10,7 @@ COPY src ./src
 RUN mvn -B -q package -DskipTests
 
 # --- runtime stage ---------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 COPY --from=build /build/target/order-support-assistant-*.jar app.jar
