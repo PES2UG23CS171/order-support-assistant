@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Spring releases move together; one PR per week beats fifteen.
+      spring:
+        patterns: ['org.springframework*']
+      testing:
+        patterns: ['org.testcontainers:*', 'org.junit*', 'org.mockito:*', 'org.assertj:*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

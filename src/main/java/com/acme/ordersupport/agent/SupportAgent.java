@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -53,7 +52,7 @@ public class SupportAgent {
 
     private static final Logger log = LoggerFactory.getLogger(SupportAgent.class);
 
-    private final ChatClient chatClient;
+    private final ChatClientProvider chatClients;
     private final SupportTools tools;
     private final PolicyRetriever retriever;
     private final PromptInjectionGuard injectionGuard;
@@ -65,13 +64,13 @@ public class SupportAgent {
     private final AppProperties properties;
     private final String systemPromptTemplate;
 
-    public SupportAgent(ChatClient chatClient, SupportTools tools, PolicyRetriever retriever,
+    public SupportAgent(ChatClientProvider chatClients, SupportTools tools, PolicyRetriever retriever,
                         PromptInjectionGuard injectionGuard, ScopeGuard scopeGuard,
                         GuardrailEventRepository guardrailEvents, ConversationRepository conversations,
                         ConfirmationService confirmations, AuditService audit, AppProperties properties,
                         @org.springframework.beans.factory.annotation.Value("classpath:prompts/system-prompt.md")
                         Resource systemPrompt) {
-        this.chatClient = chatClient;
+        this.chatClients = chatClients;
         this.tools = tools;
         this.retriever = retriever;
         this.injectionGuard = injectionGuard;
@@ -128,7 +127,7 @@ public class SupportAgent {
 
         // The turn's own message was appended to history a moment ago, so it is
         // already the last entry; adding it again would duplicate it.
-        return chatClient.prompt()
+        return chatClients.require().prompt()
                 .messages(messages)
                 .tools(tools)
                 .toolContext(session.asToolContext())

@@ -1,5 +1,6 @@
 package com.acme.ordersupport.web;
 
+import com.acme.ordersupport.agent.AssistantUnavailableException;
 import com.acme.ordersupport.agent.ConversationNotFoundException;
 import com.acme.ordersupport.agent.ToolIdentityMismatchException;
 import com.acme.ordersupport.agent.confirm.ConfirmationErrors;
@@ -72,6 +73,12 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Session error",
                 "The session could not be verified. Please start a new conversation.",
                 "SESSION_IDENTITY_MISMATCH");
+    }
+
+    @ExceptionHandler(AssistantUnavailableException.class)
+    ProblemDetail assistantUnavailable(AssistantUnavailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Assistant unavailable", ex.getMessage(),
+                "ASSISTANT_NOT_CONFIGURED");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

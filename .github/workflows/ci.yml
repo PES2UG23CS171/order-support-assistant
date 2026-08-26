@@ -1,0 +1,259 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAVEN_ARGS: -B -ntp -Dstyle.color=never
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Compile once. If this fails, nothing downstream is worth running.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Compile main and test sources
+        run: ./mvnw $MAVEN_ARGS test-compile
+
+      - name: Package
+        run: ./mvnw $MAVEN_ARGS package -DskipTests
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # The three suites run as separate jobs so a failure names its own layer:
+  # a red `unit` is a broken rule, a red `system` with green `unit` is a wiring
+  # or contract problem. They are independent, so they run in parallel.
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Run unit suite
+        run: ./mvnw $MAVEN_ARGS verify -Punit
+
+      - name: Summarise
+        if: always()
+        run: .github/scripts/test-summary.sh "Unit" target/surefire-reports
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: |
+            target/surefire-reports/**
+            target/jacoco-unit.exec
+          retention-days: 7
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Pulling ahead of the run keeps the container-start timeout about container
+      # startup rather than about image download speed.
+      - name: Pre-pull the pgvector image
+        run: docker pull pgvector/pgvector:pg16
+
+      - name: Run integration suite
+        run: ./mvnw $MAVEN_ARGS verify -Pintegration
+
+      - name: Summarise
+        if: always()
+        run: .github/scripts/test-summary.sh "Integration" target/failsafe-reports
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-reports
+          path: |
+            target/failsafe-reports/**
+            target/jacoco-it.exec
+          retention-days: 7
+
+  system-tests:
+    name: System tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Pre-pull the pgvector image
+        run: docker pull pgvector/pgvector:pg16
+
+      - name: Run system suite
+        run: ./mvnw $MAVEN_ARGS verify -Psystem
+
+      - name: Summarise
+        if: always()
+        run: .github/scripts/test-summary.sh "System" target/failsafe-reports
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: system-test-reports
+          path: |
+            target/failsafe-reports/**
+            target/jacoco-it.exec
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Coverage is gated across all three suites together. Gating each suite alone
+  # would punish integration-only paths (transaction propagation, SQL) for being
+  # untestable by unit tests, which is the wrong incentive.
+  # ---------------------------------------------------------------------------
+  coverage:
+    name: Coverage gate
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, system-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Rebuild classes for analysis
+        run: ./mvnw $MAVEN_ARGS test-compile
+
+      - name: Collect execution data from every suite
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-test-reports'
+          merge-multiple: true
+          path: downloaded-reports
+
+      - name: Stage execution data
+        run: |
+          mkdir -p target
+          find downloaded-reports -name 'jacoco-*.exec' -exec cp {} target/ \;
+          ls -la target/*.exec
+
+      - name: Merge, report and enforce the gate
+        run: |
+          ./mvnw $MAVEN_ARGS \
+            jacoco:merge@merge-exec-files \
+            jacoco:report@merged-report \
+            jacoco:check@coverage-gate
+
+      - name: Summarise coverage
+        if: always()
+        run: .github/scripts/coverage-summary.sh target/site/jacoco-merged/jacoco.csv
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: target/site/jacoco-merged/**
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Supply chain. Dependency review only has something to compare against on a
+  # pull request, so it is skipped on push rather than failing there.
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  # ---------------------------------------------------------------------------
+  # Build the image and prove it actually boots and serves traffic. A build that
+  # only proves the Dockerfile parses is not worth the minutes it costs.
+  # ---------------------------------------------------------------------------
+  container:
+    name: Container build and smoke test
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, system-tests]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: order-support-assistant:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot the image against a real database and probe it
+        run: .github/scripts/container-smoke-test.sh order-support-assistant:ci
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: order-support-assistant:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          # Reported, not gated: a base-image CVE with no fix available should be
+          # visible on the security tab, not a reason main goes red overnight.
+          exit-code: '0'
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true

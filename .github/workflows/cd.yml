@@ -1,0 +1,152 @@
+name: CD
+
+# Runs only after CI has gone green on main. Chaining on workflow_run rather than
+# duplicating the test jobs means the artifact that gets deployed is the one the
+# tests actually passed against.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy to
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  MAVEN_ARGS: -B -ntp -Dstyle.color=never
+
+jobs:
+  publish:
+    name: Publish image
+    runs-on: ubuntu-latest
+    # A failed or cancelled CI run must not publish anything.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Record what was published
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "digest: ${{ steps.build.outputs.digest }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: publish
+    environment:
+      name: staging
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # There is no hosted staging environment behind this repository, so rather
+      # than a step that echoes "deploying..." and proves nothing, the published
+      # image is pulled and stood up here against a real database and probed
+      # exactly as a deploy verification would probe it. Replacing this with a
+      # `kubectl apply` or `aws ecs update-service` leaves the rest of the
+      # pipeline -- the gate, the smoke test, the promotion -- unchanged.
+      - name: Stand up the published image and verify it
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+          docker pull "$IMAGE"
+          .github/scripts/container-smoke-test.sh "$IMAGE"
+
+      - name: Record the deployment
+        run: |
+          {
+            echo "### Staging"
+            echo
+            echo "Deployed \`sha-${{ github.sha }}\` and verified: health, "
+            echo "authentication, seeded data and policy retrieval all responded."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-production:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: [publish, deploy-staging]
+    # Only tagged releases reach production, and the `production` environment
+    # carries a required reviewer, so this job waits for a human. That is the same
+    # shape as the confirmation gate in the application: the automated system can
+    # prepare a change and cannot apply one on its own.
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.environment == 'production'
+    environment:
+      name: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy
+        run: |
+          echo "Would roll out ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+          echo "No production infrastructure is attached to this repository."
+          echo "The real command belongs here; everything gating it is already real."

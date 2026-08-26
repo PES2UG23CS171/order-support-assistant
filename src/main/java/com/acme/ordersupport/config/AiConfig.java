@@ -3,7 +3,6 @@ package com.acme.ordersupport.config;
 import com.acme.ordersupport.rag.HashingEmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -29,10 +28,5 @@ public class AiConfig {
         log.info("app.ai.mode=offline: using the deterministic local embedding model. "
                  + "Retrieval is exact and free; it matches on shared vocabulary rather than meaning.");
         return new HashingEmbeddingModel();
-    }
-
-    @Bean
-    ChatClient supportChatClient(ChatClient.Builder builder) {
-        return builder.build();
     }
 }

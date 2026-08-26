@@ -24,9 +24,14 @@
         <spring-ai.version>1.1.8</spring-ai.version>
         <jacoco.version>0.8.15</jacoco.version>
 
-        <!-- Per-suite switches. CI flips these to run one suite per job. -->
-        <skip.unit.tests>false</skip.unit.tests>
-        <skip.integration.tests>false</skip.integration.tests>
+        <!-- Per-suite switches. CI flips these to run one suite per job.
+             They derive from the conventional skipTests so that `-DskipTests`
+             still does what everyone expects: naming them directly in the plugin
+             configuration would otherwise take precedence over the user property
+             and silently run the tests anyway. -->
+        <skipTests>false</skipTests>
+        <skip.unit.tests>${skipTests}</skip.unit.tests>
+        <skip.integration.tests>${skipTests}</skip.integration.tests>
 
         <!-- Enforced by jacoco:check at `verify` over the merged unit + integration
              + system data. The suites currently sit at 93% line / 85% branch; the
