@@ -1,5 +1,8 @@
 # Order Support Assistant
 
+[![CI](https://github.com/PES2UG23CS171/order-support-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/PES2UG23CS171/order-support-assistant/actions/workflows/ci.yml)
+[![CD](https://github.com/PES2UG23CS171/order-support-assistant/actions/workflows/cd.yml/badge.svg)](https://github.com/PES2UG23CS171/order-support-assistant/actions/workflows/cd.yml)
+
 An e-commerce customer support agent built with **Spring Boot 3.5** and **Spring AI 1.1**:
 a chat API where a language model answers policy questions from a retrieved corpus and
 takes action on real orders — without ever being able to change one on its own.
