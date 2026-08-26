@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: osa-postgres
+    environment:
+      POSTGRES_DB: ordersupport
+      POSTGRES_USER: ordersupport
+      POSTGRES_PASSWORD: ordersupport
+    ports:
+      - "5432:5432"
+    volumes:
+      - osa-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ordersupport -d ordersupport"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    container_name: osa-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ordersupport
+      SPRING_DATASOURCE_USERNAME: ordersupport
+      SPRING_DATASOURCE_PASSWORD: ordersupport
+      # Unset OPENAI_API_KEY to run the deterministic offline stack (no external calls).
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      APP_AI_MODE: ${APP_AI_MODE:-offline}
+    ports:
+      - "8080:8080"
+
+volumes:
+  osa-pgdata:
