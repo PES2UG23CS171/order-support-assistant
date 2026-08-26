@@ -1,0 +1,9 @@
+# Keeps the suite's output readable. Everything that matters is set by the
+# @IntegrationTest / @SystemTest annotations so it is visible at the test class.
+logging:
+  level:
+    root: WARN
+    com.acme.ordersupport: INFO
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN
+    org.flywaydb: WARN

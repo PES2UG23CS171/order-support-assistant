@@ -17,8 +17,10 @@ import com.acme.ordersupport.order.repo.RefundRepository;
 import com.acme.ordersupport.order.repo.ReturnRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -107,6 +109,21 @@ public class ReturnService {
     }
 
     private Eligibility returnEligibility(OrderView order) {
+        // Checked before the delivery state, not after. Opening a return moves the
+        // order to RETURN_REQUESTED, so a status-first ordering answers the second
+        // request with "this order is not delivered yet" -- which names a status the
+        // customer can see is wrong, about an order they are holding in their hands.
+        if (returns.findOpenByOrder(order.id()).isPresent()) {
+            return Eligibility.denied("RETURN_ALREADY_OPEN",
+                    ("Order %s already has an open return. Only one return can be in flight per order at a "
+                     + "time.").formatted(order.orderNumber()));
+        }
+
+        if (order.status() == OrderStatus.RETURNED || order.status() == OrderStatus.REFUNDED) {
+            return Eligibility.denied("ALREADY_RETURNED",
+                    "Order %s has already been returned.".formatted(order.orderNumber()));
+        }
+
         if (order.status() != OrderStatus.DELIVERED) {
             return Eligibility.denied("ORDER_NOT_DELIVERED",
                     ("Order %s is not delivered yet (status %s). A return can only be opened once the parcel "
@@ -128,17 +145,18 @@ public class ReturnService {
         }
 
         int windowDays = CommercePolicy.returnWindowDays(returnable);
-        long daysSinceDelivery = Duration.between(shipment.deliveredAt(), clock.instant()).toDays();
+        // Calendar days between the delivery date and today, not elapsed duration.
+        // returns-policy.md measures the window "from the date the carrier marks the
+        // parcel delivered", and a customer counting on their fingers agrees with
+        // that. Duration.toDays() truncates, so a parcel delivered 45 days and two
+        // minutes ago would be reported back to them as 44.
+        long daysSinceDelivery = ChronoUnit.DAYS.between(
+                LocalDate.ofInstant(shipment.deliveredAt(), ZoneOffset.UTC),
+                LocalDate.now(clock));
         if (daysSinceDelivery > windowDays) {
             return Eligibility.denied("RETURN_WINDOW_EXPIRED",
                     ("Order %s was delivered %d days ago and the return window for it is %d days, so it is "
                      + "outside the window.").formatted(order.orderNumber(), daysSinceDelivery, windowDays));
-        }
-
-        if (returns.findOpenByOrder(order.id()).isPresent()) {
-            return Eligibility.denied("RETURN_ALREADY_OPEN",
-                    ("Order %s already has an open return. Only one return can be in flight per order at a "
-                     + "time.").formatted(order.orderNumber()));
         }
 
         return Eligibility.allowed(("Order %s was delivered %d days ago, inside its %d-day return window, and "

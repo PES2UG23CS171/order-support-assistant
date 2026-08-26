@@ -16,7 +16,10 @@ INSERT INTO customers (id, email, full_name, api_key_hash) VALUES
 -- ORD-1001  PROCESSING, unshipped        -> cancellable
 -- ORD-1002  SHIPPED, in transit          -> NOT cancellable, NOT yet returnable
 -- ORD-1003  DELIVERED 5 days ago         -> inside the 30-day return window
--- ORD-1004  DELIVERED 45 days ago        -> outside the return window
+-- ORD-1004  DELIVERED 45 days ago, furniture -> still inside the 60-day window
+-- ORD-1007  DELIVERED 45 days ago, audio     -> outside the standard 30-day window
+--           (1004 and 1007 are the same age on purpose: the only thing separating
+--            them is category, which is what the extended window turns on)
 -- ORD-1005  DELIVERED 3 days ago         -> contains a non-returnable gift card
 -- ORD-1006  CANCELLED, refund in flight  -> refund status lookups
 -- ORD-2001  Blake's order                -> cross-customer authorization checks
@@ -34,6 +37,8 @@ INSERT INTO orders (id, order_number, customer_id, status, total_amount, placed_
      'DELIVERED',  100.00, now() - interval '9 days',  NULL, 'Austin',   'US'),
     ('a0000006-0000-0000-0000-000000000006', 'ORD-1006', '11111111-1111-1111-1111-111111111111',
      'CANCELLED',  310.75, now() - interval '20 days', now() - interval '18 days', 'Austin', 'US'),
+    ('a0000007-0000-0000-0000-000000000007', 'ORD-1007', '11111111-1111-1111-1111-111111111111',
+     'DELIVERED',  219.00, now() - interval '50 days', NULL, 'Austin',   'US'),
     ('b0000001-0000-0000-0000-000000000001', 'ORD-2001', '22222222-2222-2222-2222-222222222222',
      'PROCESSING', 75.00,  now() - interval '2 days',  NULL, 'Seattle',  'US');
 
@@ -51,7 +56,9 @@ INSERT INTO order_items (id, order_id, sku, description, category, quantity, uni
     ('c0000006-0000-0000-0000-000000000006', 'a0000006-0000-0000-0000-000000000006',
      'DESK-06',     'Standing desk, 60 inch',        'FURNITURE',   1, 310.75, true),
     ('c0000007-0000-0000-0000-000000000007', 'b0000001-0000-0000-0000-000000000001',
-     'CBL-USB-07',  'USB-C cable, 2m, 3-pack',       'ACCESSORIES', 1,  75.00, true);
+     'CBL-USB-07',  'USB-C cable, 2m, 3-pack',       'ACCESSORIES', 1,  75.00, true),
+    ('c0000008-0000-0000-0000-000000000008', 'a0000007-0000-0000-0000-000000000007',
+     'SPK-DESK-08', 'Desktop studio monitors, pair', 'AUDIO',       1, 219.00, true);
 
 INSERT INTO shipments (id, order_id, carrier, tracking_number, status, shipped_at,
                        estimated_delivery, delivered_at, last_location) VALUES
@@ -66,7 +73,10 @@ INSERT INTO shipments (id, order_id, carrier, tracking_number, status, shipped_a
      (current_date - 45), now() - interval '45 days', 'Austin, TX'),
     ('d0000005-0000-0000-0000-000000000005', 'a0000005-0000-0000-0000-000000000005',
      'EMAIL', 'DIGITAL-DELIVERY',   'DELIVERED',  now() - interval '9 days',
-     (current_date - 3), now() - interval '3 days', 'ada@example.com');
+     (current_date - 3), now() - interval '3 days', 'ada@example.com'),
+    ('d0000007-0000-0000-0000-000000000007', 'a0000007-0000-0000-0000-000000000007',
+     'UPS',   '1Z999AA10199999999', 'DELIVERED',  now() - interval '49 days',
+     (current_date - 45), now() - interval '45 days', 'Austin, TX');
 
 -- ORD-1006 was cancelled two days after it was placed; the refund is still moving.
 INSERT INTO refunds (id, order_id, return_request_id, status, amount, method,

@@ -76,8 +76,21 @@ public class ConfirmationService {
      * against the injected clock, and single use by claiming the row with a
      * compare-and-set before any work starts -- so a double-clicked Confirm button
      * cancels one order, not two.
+     *
+     * <p>Deliberately <em>not</em> {@code @Transactional}. This is a three-step
+     * saga -- claim, execute, record -- and each step must commit on its own. When
+     * it was one transaction, marking a proposal FAILED and then rethrowing rolled
+     * the mark back with the exception, leaving the row awaiting a confirmation
+     * that could never succeed. Wrapping the claim in the same transaction as the
+     * work would also hide it from a concurrent request until commit, which is the
+     * opposite of what claiming a token is for.
+     *
+     * <p>The action itself is still atomic: {@code OrderService.cancel} and
+     * {@code ReturnService.initiateReturn} each open their own transaction. What is
+     * not atomic is the bookkeeping around it, and a proposal stuck in
+     * {@code EXECUTING} after a crash is a visible, recoverable state -- which is
+     * why that status exists rather than going straight to EXECUTED.
      */
-    @Transactional
     public ConfirmationOutcome decide(UUID customerId, UUID token, ConfirmationDecision decision) {
         PendingAction action = pendingActions.findById(token)
                 .orElseThrow(() -> new ConfirmationErrors.NotFound(token));
