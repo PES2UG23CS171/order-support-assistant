@@ -54,6 +54,7 @@ public class ScopeGuard {
             compile("\\bweather\\b|\\bforecast\\b"),
             compile("\\b(who|which\\s+party)\\s+should\\s+i\\s+vote"),
             compile("\\b(stock|shares|crypto|bitcoin|invest|portfolio)\\b.*\\b(buy|sell|advice|recommend)"),
+            compile("\\b(buy|sell|invest|investing)\\b.*\\b(stock|shares|crypto|bitcoin|portfolio)\\b"),
             compile("\\b(diagnos|symptom|prescri|medication|dosage)"),
             compile("\\b(recipe|cook|bake)\\b"),
             compile("\\b(write|compose)\\s+(me\\s+)?(a|an)\\s+(poem|song|essay|story|email\\s+to\\s+my)"),
