@@ -39,7 +39,7 @@ jobs:
         run: ./mvnw $MAVEN_ARGS package -DskipTests
 
       - name: Upload jar
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: application-jar
           path: target/*.jar
@@ -69,7 +69,7 @@ jobs:
         if: always()
         run: .github/scripts/test-summary.sh "Unit" target/surefire-reports
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: unit-test-reports
@@ -108,7 +108,7 @@ jobs:
         if: always()
         run: .github/scripts/test-summary.sh "Integration" target/failsafe-reports
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: integration-test-reports
@@ -143,7 +143,7 @@ jobs:
         if: always()
         run: .github/scripts/test-summary.sh "System" target/failsafe-reports
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: system-test-reports
@@ -210,7 +210,7 @@ jobs:
         if: always()
         run: .github/scripts/coverage-summary.sh target/site/jacoco-merged/jacoco.csv
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: coverage-report
