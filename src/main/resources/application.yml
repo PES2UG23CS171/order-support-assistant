@@ -91,11 +91,14 @@ logging:
 #   ollama serve && ollama pull qwen2.5:7b
 #   make run-ollama
 #
-# qwen2.5:7b was chosen by measurement, not reputation -- scripts/probe-ollama-model.py
-# checks the three things this project actually needs from a model, and the results are
-# in the README. The short version: a model that merely lists "tools" as a capability is
-# not enough. mistral:7b advertises tool support and never emits a tool call; it narrates
-# calling the function instead, so the agent chats pleasantly and never touches an order.
+# llama3.1:8b was chosen by measurement, not reputation -- scripts/probe-ollama-model.py
+# checks the things this project actually needs from a model, against the real prompt and
+# the real five-tool set, and the results are in the README.
+#
+# Two models were rejected on evidence. mistral:7b advertises tool support and never emits
+# a tool call; it narrates calling the function instead, so the agent chats pleasantly and
+# never touches an order. qwen2.5:7b handles reads perfectly and cannot pick cancelOrder
+# out of five similar signatures -- a capability ceiling, not a prompt problem.
 spring:
   config:
     activate:
@@ -117,7 +120,7 @@ spring:
         pull-model-strategy: never
       chat:
         options:
-          model: "${OLLAMA_CHAT_MODEL:qwen2.5:7b}"
+          model: "${OLLAMA_CHAT_MODEL:llama3.1:8b}"
           temperature: 0.2
 
 app:

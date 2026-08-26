@@ -128,14 +128,22 @@ make run       # the application, local profile, demo fixtures loaded
 make demo      # walks the guardrail story end to end
 ```
 
-Chat needs a model provider; everything else does not:
+Chat needs a model provider. Either a hosted one:
 
 ```bash
 export OPENAI_API_KEY=sk-...
 make run
 ```
 
-Without a key the application still starts and serves order lookups, returns, refunds and
+…or a local one, which makes the whole thing keyless — `make demo` then walks the full
+guardrail story, confirmation gate included, with nothing leaving the machine:
+
+```bash
+ollama serve && ollama pull llama3.1:8b
+make run-ollama
+```
+
+With neither, the application still starts and serves order lookups, returns, refunds and
 policy search — only `POST /api/v1/chat` answers 503. That is deliberate, and
 [`NoChatModelSystemIT`](src/test/java/com/acme/ordersupport/system/NoChatModelSystemIT.java)
 pins it: one unconfigured optional dependency should cost one endpoint, not the service.
@@ -173,24 +181,25 @@ near-identical signatures — all of which take an `orderNumber` — while carry
 project's system prompt:
 
 ```bash
-make probe-model MODEL=llama3.1:8b
+make probe-model MODEL=qwen2.5:14b
 ```
 
 [`probe-ollama-model.py`](scripts/probe-ollama-model.py) loads the real prompt and the
 real tool set from the repository and exits non-zero if the model would miss calls in
-normal use. Measured on an M2 Pro / 16 GB:
+normal use. Measured on an M2 Pro / 16 GB, all five tools offered:
 
 | Model | Read tools | Action tools | Doesn't overclaim | Verdict |
 | --- | --- | --- | --- | --- |
-| `mistral:7b` | 0/3 | 0/3 | pass | **Unusable.** Never emits a tool call — it narrates "you can use the `lookupOrder` function" instead. |
+| `llama3.1:8b` | 4/4 | 4/4 | pass | **What the profile ships with.** |
 | `qwen2.5:7b` | 3/3 | 0/3 | pass | Reads are reliable; it will not call `cancelOrder` or `initiateReturn`. |
+| `mistral:7b` | 0/3 | 0/3 | pass | **Unusable.** Never emits a tool call — it narrates "you can use the `lookupOrder` function" instead. |
 
 `mistral` is the trap this whole section exists for. It advertises `tools` in
 `ollama show`, and the agent built on it would answer questions fluently while never
-touching an order — the failure is invisible unless you check whether a tool actually ran.
+touching an order — invisible unless you check whether a tool actually ran.
 
-The `qwen2.5:7b` result is narrower and more interesting. Bisecting the tool set shows a
-clean capability ceiling rather than a prompt bug:
+The `qwen2.5:7b` result is narrower and more interesting, because it is a *selection*
+failure rather than a capability one. Bisecting the tool set:
 
 | Tools offered | `cancelOrder` called |
 | --- | --- |
@@ -198,14 +207,15 @@ clean capability ceiling rather than a prompt bug:
 | 4 | 1/4 |
 | 5 | 0/4 |
 
-Same prompt, same message, same model — only the number of alternatives changes. It is not
-the wording either: the full system prompt with three tools scores 4/4, and rewriting the
-"What you cannot do" section or leading each description with its trigger moved it barely at
-all. A 7B model simply cannot discriminate between five tools that share a signature.
+Same prompt, same message, same model — only the number of alternatives changes. Nor is
+it the wording: the full system prompt with three tools scores 4/4, and rewriting the
+instructions or leading each description with its trigger moved it barely at all. It
+simply cannot discriminate between five tools that share a signature. Worth knowing
+because the obvious diagnosis — "the prompt must be wrong" — costs an afternoon.
 
-**So: use a hosted model for the conversational demo, or a larger local one.** Anything
-below ~8B is unlikely to clear this bar, and the honest way to find out is to run the probe
-rather than trust a table someone else wrote.
+Model reputation would have picked wrong here. Qwen2.5 generally scores above Llama 3.1
+on function-calling benchmarks, and on *this* five-tool set it fails where Llama 3.1
+succeeds. Which is the argument for the probe: measure against your own tools.
 
 The failure is at least loud rather than silent, because of a design decision made earlier
 for other reasons: `toolCalls` and `pendingAction` on the chat response are read back out of

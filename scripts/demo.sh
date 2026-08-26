@@ -83,7 +83,8 @@ api POST /api/v1/orders/ORD-1002/cancel "$ADA" '{"reason":"changed my mind"}' | 
 CHAT_STATUS=$(status_of POST /api/v1/chat "$ADA" '{"message":"hello"}')
 if [[ "$CHAT_STATUS" == "503" ]]; then
   bold "Chat is not configured on this instance"
-  dim "  Set OPENAI_API_KEY and restart to walk the conversational half."
+  dim "  For the conversational half, either export OPENAI_API_KEY, or run fully local:"
+  dim "    ollama serve && ollama pull llama3.1:8b && make run-ollama"
   dim "  The confirmation gate is covered end to end by the system suite regardless:"
   dim "    ./mvnw verify -Psystem     (see ConfirmationSystemIT)"
   exit 0
