@@ -275,9 +275,20 @@ jobs:
           # visible on the security tab, not a reason main goes red overnight.
           exit-code: '0'
 
-      - name: Upload scan results
+      # Ingesting SARIF into the security tab needs code scanning, which a private
+      # repository without Advanced Security does not have -- the step fails and
+      # annotates every run red for a reason unrelated to the code. Gated on
+      # visibility, with the report attached either way so the scan is never lost.
+      - name: Upload scan results to code scanning
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && github.event.repository.visibility == 'public'
         with:
           sarif_file: trivy-results.sarif
-        continue-on-error: true
+
+      - name: Attach scan results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: image-scan-results
+          path: trivy-results.sarif
+          retention-days: 14
