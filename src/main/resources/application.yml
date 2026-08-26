@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: order-support-assistant
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ordersupport}
+    username: ${SPRING_DATASOURCE_USERNAME:ordersupport}
+    password: ${SPRING_DATASOURCE_PASSWORD:ordersupport}
+    hikari:
+      maximum-pool-size: 10
+
+  flyway:
+    enabled: true
+    # Production runs migrations only. Demo fixtures live in db/seed and are added
+    # to this list by the local and test profiles.
+    locations: classpath:db/migration
+
+  ai:
+    openai:
+      # Only needed for the chat model. Retrieval runs offline; see app.ai.mode.
+      api-key: ${OPENAI_API_KEY:missing-openai-api-key}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: 0.2
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    vectorstore:
+      pgvector:
+        # The table is created and versioned by Flyway (V2__vector_store.sql), not
+        # by the library, so schema changes go through review like any other DDL.
+        initialize-schema: false
+        table-name: vector_store
+        dimensions: 1536
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  ai:
+    # `openai` for hosted embeddings, `offline` for the deterministic local model.
+    mode: ${APP_AI_MODE:openai}
+  rag:
+    top-k: 4
+    similarity-threshold: 0.35
+    ingest-on-startup: true
+    max-chunk-chars: 1200
+    chunk-overlap-chars: 150
+  agent:
+    confirmation-ttl: PT10M
+    max-history-messages: 12
+  guardrail:
+    scope-check-enabled: true
+    injection-check-enabled: true
+
+logging:
+  level:
+    com.acme.ordersupport: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed
+
+app:
+  ai:
+    mode: ${APP_AI_MODE:offline}
+
+logging:
+  level:
+    com.acme.ordersupport: DEBUG
