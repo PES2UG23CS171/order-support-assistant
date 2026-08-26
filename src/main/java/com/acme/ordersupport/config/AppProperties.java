@@ -13,7 +13,7 @@ public record AppProperties(Ai ai, Rag rag, Agent agent, Guardrail guardrail) {
 
     public AppProperties {
         ai = ai != null ? ai : new Ai(null);
-        rag = rag != null ? rag : new Rag(null, null, null, null, null);
+        rag = rag != null ? rag : new Rag(null, null, null, null, null, null);
         agent = agent != null ? agent : new Agent(null, null);
         guardrail = guardrail != null ? guardrail : new Guardrail(null, null);
     }
@@ -35,11 +35,17 @@ public record AppProperties(Ai ai, Rag rag, Agent agent, Guardrail guardrail) {
         }
     }
 
-    public record Rag(Integer topK, Double similarityThreshold, Boolean ingestOnStartup,
-                      Integer maxChunkChars, Integer chunkOverlapChars) {
+    /**
+     * @param similarityThreshold cut-off for hosted embeddings
+     * @param offlineSimilarityThreshold cut-off for the deterministic local model
+     */
+    public record Rag(Integer topK, Double similarityThreshold, Double offlineSimilarityThreshold,
+                      Boolean ingestOnStartup, Integer maxChunkChars, Integer chunkOverlapChars) {
         public Rag {
             topK = topK != null ? topK : 4;
             similarityThreshold = similarityThreshold != null ? similarityThreshold : 0.35d;
+            offlineSimilarityThreshold = offlineSimilarityThreshold != null
+                    ? offlineSimilarityThreshold : 0.20d;
             ingestOnStartup = ingestOnStartup != null ? ingestOnStartup : Boolean.TRUE;
             maxChunkChars = maxChunkChars != null ? maxChunkChars : 1200;
             chunkOverlapChars = chunkOverlapChars != null ? chunkOverlapChars : 150;

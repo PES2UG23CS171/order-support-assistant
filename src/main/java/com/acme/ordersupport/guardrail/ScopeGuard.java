@@ -69,6 +69,15 @@ public class ScopeGuard {
     }
 
     public GuardDecision assess(String message, List<RetrievedPolicy> passages) {
+        return assess(message, passages, false);
+    }
+
+    /**
+     * @param continuingConversation whether this customer has already had a turn in
+     *                               this conversation that was not blocked
+     */
+    public GuardDecision assess(String message, List<RetrievedPolicy> passages,
+                                boolean continuingConversation) {
         if (!properties.guardrail().scopeCheckEnabled() || message == null || message.isBlank()) {
             return GuardDecision.allow();
         }
@@ -96,6 +105,15 @@ public class ScopeGuard {
             }
         }
         if (!passages.isEmpty()) {
+            return GuardDecision.allow();
+        }
+
+        // "and when will it get here?" carries no order number, no domain word and
+        // matches no passage -- read alone it looks out of scope, and refusing it
+        // mid-conversation is absurd. Follow-up turns get the benefit of the doubt;
+        // the explicit off-topic patterns above still apply, so a hard turn onto
+        // the weather is still refused however deep into a conversation it comes.
+        if (continuingConversation) {
             return GuardDecision.allow();
         }
 

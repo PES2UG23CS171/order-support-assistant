@@ -30,7 +30,26 @@ public class PolicyRetriever {
     }
 
     public List<RetrievedPolicy> retrieve(String query) {
-        return retrieve(query, properties.rag().topK(), properties.rag().similarityThreshold());
+        return retrieve(query, properties.rag().topK(), defaultSimilarityThreshold());
+    }
+
+    /**
+     * A similarity threshold is a property of the embedding model, not of the
+     * application, and carrying one number across both is how a RAG system quietly
+     * stops retrieving.
+     *
+     * <p>Measured on this corpus: the deterministic local model scores genuinely
+     * relevant passages between 0.26 and 0.43 and irrelevant ones between 0.07 and
+     * 0.16, so 0.20 separates them with room on both sides. Dense hosted embeddings
+     * sit much higher and need roughly 0.35 to reject anything at all. Using the
+     * hosted number against the local model discarded real matches -- "cancel my
+     * order before it ships" scores 0.26 -- and the symptom was a bot that answered
+     * every policy question with "I don't have that policy to hand".
+     */
+    public double defaultSimilarityThreshold() {
+        return properties.ai().offline()
+                ? properties.rag().offlineSimilarityThreshold()
+                : properties.rag().similarityThreshold();
     }
 
     public List<RetrievedPolicy> retrieve(String query, int topK, double similarityThreshold) {

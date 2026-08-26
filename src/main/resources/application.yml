@@ -51,7 +51,9 @@ app:
     mode: ${APP_AI_MODE:openai}
   rag:
     top-k: 4
+    # Cut-offs differ per embedding model; see PolicyRetriever for the measurements.
     similarity-threshold: 0.35
+    offline-similarity-threshold: 0.20
     ingest-on-startup: true
     max-chunk-chars: 1200
     chunk-overlap-chars: 150

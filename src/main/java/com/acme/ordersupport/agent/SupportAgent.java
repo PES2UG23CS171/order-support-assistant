@@ -88,6 +88,8 @@ public class SupportAgent {
         UUID conversationId = resolveConversation(customerId, requestedConversationId);
         SupportSession session = new SupportSession(conversationId, customerId);
 
+        // Read before appending this turn's message, so it does not count itself.
+        boolean continuingConversation = !conversations.recentMessages(conversationId, 1).isEmpty();
         conversations.append(conversationId, ConversationRepository.StoredMessage.USER, message);
         long auditWatermark = audit.highWaterMark(conversationId);
 
@@ -98,7 +100,7 @@ public class SupportAgent {
 
         List<RetrievedPolicy> passages = retriever.retrieve(message);
 
-        GuardDecision scope = scopeGuard.assess(message, passages);
+        GuardDecision scope = scopeGuard.assess(message, passages, continuingConversation);
         if (scope.blocked()) {
             return refuse(session, scope, message, passages, auditWatermark);
         }
