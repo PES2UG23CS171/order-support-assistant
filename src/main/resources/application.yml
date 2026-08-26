@@ -83,3 +83,43 @@ app:
 logging:
   level:
     com.acme.ordersupport: DEBUG
+
+---
+# Fully local: chat from Ollama, embeddings from the deterministic local model, no
+# API key and no outbound network anywhere in the stack.
+#
+#   ollama serve && ollama pull qwen2.5:7b
+#   make run-ollama
+#
+# qwen2.5:7b was chosen by measurement, not reputation -- scripts/probe-ollama-model.py
+# checks the three things this project actually needs from a model, and the results are
+# in the README. The short version: a model that merely lists "tools" as a capability is
+# not enough. mistral:7b advertises tool support and never emits a tool call; it narrates
+# calling the function instead, so the agent chats pleasantly and never touches an order.
+spring:
+  config:
+    activate:
+      on-profile: ollama
+  ai:
+    model:
+      # Selects Ollama over OpenAI for chat. Both starters are on the classpath, so
+      # switching providers is this one property and no code change.
+      chat: ollama
+      # Embeddings stay local. Ollama's embedding models output 768 dimensions and the
+      # vector_store column is vector(1536), so pointing embeddings at Ollama would need
+      # a migration -- see the README before doing it.
+      embedding: none
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      init:
+        # The model is pulled deliberately, not implicitly on first request: a silent
+        # 4.7 GB download inside a health check is a bad surprise.
+        pull-model-strategy: never
+      chat:
+        options:
+          model: "${OLLAMA_CHAT_MODEL:qwen2.5:7b}"
+          temperature: 0.2
+
+app:
+  ai:
+    mode: offline

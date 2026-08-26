@@ -152,6 +152,67 @@ curl -s -X POST localhost:8080/api/v1/chat -H 'X-API-Key: osa_demo_ada_key' \
      -d '{"message":"Please cancel ORD-1001, I ordered it by mistake"}'
 ```
 
+### Running the chat model locally (Ollama)
+
+Both providers sit on the classpath and `spring.ai.model.chat` picks between them, so
+switching is a property and no code change:
+
+```bash
+ollama serve && ollama pull qwen2.5:7b
+make run-ollama          # profiles: local,ollama
+```
+
+That profile is fully local — Ollama for chat, the deterministic model for embeddings,
+no API key and no outbound network anywhere in the stack. Embeddings stay local
+deliberately: Ollama's embedding models output 768 dimensions and `vector_store` is
+`vector(1536)`, so pointing embeddings at Ollama needs a migration first.
+
+**Choose the model by measuring it, not by reading its model card.** "Supports tools" is
+not the bar. The bar is whether a model picks the right tool out of this project's five
+near-identical signatures — all of which take an `orderNumber` — while carrying this
+project's system prompt:
+
+```bash
+make probe-model MODEL=llama3.1:8b
+```
+
+[`probe-ollama-model.py`](scripts/probe-ollama-model.py) loads the real prompt and the
+real tool set from the repository and exits non-zero if the model would miss calls in
+normal use. Measured on an M2 Pro / 16 GB:
+
+| Model | Read tools | Action tools | Doesn't overclaim | Verdict |
+| --- | --- | --- | --- | --- |
+| `mistral:7b` | 0/3 | 0/3 | pass | **Unusable.** Never emits a tool call — it narrates "you can use the `lookupOrder` function" instead. |
+| `qwen2.5:7b` | 3/3 | 0/3 | pass | Reads are reliable; it will not call `cancelOrder` or `initiateReturn`. |
+
+`mistral` is the trap this whole section exists for. It advertises `tools` in
+`ollama show`, and the agent built on it would answer questions fluently while never
+touching an order — the failure is invisible unless you check whether a tool actually ran.
+
+The `qwen2.5:7b` result is narrower and more interesting. Bisecting the tool set shows a
+clean capability ceiling rather than a prompt bug:
+
+| Tools offered | `cancelOrder` called |
+| --- | --- |
+| 1–3 | 4/4 |
+| 4 | 1/4 |
+| 5 | 0/4 |
+
+Same prompt, same message, same model — only the number of alternatives changes. It is not
+the wording either: the full system prompt with three tools scores 4/4, and rewriting the
+"What you cannot do" section or leading each description with its trigger moved it barely at
+all. A 7B model simply cannot discriminate between five tools that share a signature.
+
+**So: use a hosted model for the conversational demo, or a larger local one.** Anything
+below ~8B is unlikely to clear this bar, and the honest way to find out is to run the probe
+rather than trust a table someone else wrote.
+
+The failure is at least loud rather than silent, because of a design decision made earlier
+for other reasons: `toolCalls` and `pendingAction` on the chat response are read back out of
+the audit table, not accumulated in memory. When the model narrates a cancellation it never
+requested, the response says `pendingAction: null` and `toolCalls: []`, so a client renders
+no confirm button and the discrepancy is visible in the API rather than buried in prose.
+
 ### Fixtures
 
 Each seeded order exercises one branch of the rules. `ORD-1004` and `ORD-1007` were

@@ -36,8 +36,16 @@ verify: ## Everything, with the merged coverage gate
 	$(MVN) -B verify
 
 .PHONY: run
-run: ## Run against docker-compose Postgres
+run: ## Run against docker-compose Postgres (chat needs OPENAI_API_KEY)
 	$(MVN) spring-boot:run -Dspring-boot.run.profiles=local
+
+.PHONY: run-ollama
+run-ollama: ## Run fully local: Ollama chat, local embeddings, no API key
+	$(MVN) spring-boot:run -Dspring-boot.run.profiles=local,ollama
+
+.PHONY: probe-model
+probe-model: ## Check an Ollama model against what this project needs (MODEL=qwen2.5:7b)
+	python3 scripts/probe-ollama-model.py $(or $(MODEL),qwen2.5:7b)
 
 .PHONY: db
 db: ## Start Postgres+pgvector only
