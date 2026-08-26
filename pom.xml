@@ -220,12 +220,12 @@
                             <fileSets>
                                 <fileSet>
                                     <directory>${project.build.directory}</directory>
-                                    <!-- Named explicitly: a jacoco-*.exec glob would
-                                         also pick up the merged file this writes. -->
-                                    <includes>
-                                        <include>jacoco-unit.exec</include>
-                                        <include>jacoco-it.exec</include>
-                                    </includes>
+                                    <includes><include>jacoco-*.exec</include></includes>
+                                    <!-- Excluded rather than listing inputs: CI renames
+                                         each suite's file so artifact names cannot
+                                         collide, and the merge must pick all of them up
+                                         without picking up its own output. -->
+                                    <excludes><exclude>jacoco-merged.exec</exclude></excludes>
                                 </fileSet>
                             </fileSets>
                             <destFile>${project.build.directory}/jacoco-merged.exec</destFile>
