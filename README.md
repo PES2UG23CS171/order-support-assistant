@@ -46,6 +46,10 @@ boundary when it does.
    GET/POST /api/v1/orders ──────────┘   the same door, for the mobile app
 ```
 
+A full walk through the internals — every layer, the reasoning behind each decision, the
+seven defects the test suites caught, and a prepared interview Q&A — is in
+[docs/TECHNICAL-DEEP-DIVE.md](docs/TECHNICAL-DEEP-DIVE.md).
+
 ---
 
 ## The three things this demonstrates
