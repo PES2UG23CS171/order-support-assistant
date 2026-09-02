@@ -42,7 +42,7 @@ jobs:
       image: ${{ steps.name.outputs.image }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # github.repository preserves the owner's capitalisation and Docker
       # repository names must be lowercase. metadata-action normalises this for
@@ -106,7 +106,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Authenticate to the registry
         uses: docker/login-action@v4
@@ -154,7 +154,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Deploy
         run: |
