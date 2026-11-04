@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <spring-ai.version>1.1.8</spring-ai.version>
-        <jacoco.version>0.8.15</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
 
         <!-- Per-suite switches. CI flips these to run one suite per job.
              They derive from the conventional skipTests so that `-DskipTests`
